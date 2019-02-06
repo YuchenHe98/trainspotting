@@ -12,7 +12,7 @@ public class Lab1 {
     private TSimInterface tsi;
 
     //private AddingArrayList<Semaphore> semaphores;
-    Semaphore upperLoopControlLeft, upperLoopControlRight, lowerLoopControlLeft, lowerLoopControlRight;
+    Semaphore upperStationControl, rightSideControl, lowerBranchControl, leftSideControl, lowerStationControl;
     
     int[][] sensors;
     int[][] switches;
@@ -21,10 +21,10 @@ public class Lab1 {
         
         tsi = TSimInterface.getInstance();
                 
-        upperLoopControlLeft = new Semaphore(1);
-        upperLoopControlRight = new Semaphore(1);
-        lowerLoopControlLeft = new Semaphore(1);
-        lowerLoopControlRight = new Semaphore(1);
+        rightSideControl = new Semaphore(1);
+        leftSideControl = new Semaphore(1);
+        lowerBranchControl = new Semaphore(1);
+        lowerStationControl = new Semaphore(1);
         
         initialiseSensors();
 
@@ -87,8 +87,8 @@ public class Lab1 {
         public void run() {
             try {
                 
-                speed = maxSpeed;
-                tsi.setSpeed(id, maxSpeed);///Speed args are 15 and 15.
+                //speed = maxSpeed;
+                tsi.setSpeed(id, speed);///Speed args are 15 and 15.
                 //tsi.setSpeed(id, 0); // Prevent the speed to become 0 when reaching a station
                 
                 while (true) {
@@ -101,40 +101,96 @@ public class Lab1 {
                         /* Downwards detections. */
                         
                         if (direction == DOWNWARDS) {
+                            
                             // sensor: 14, 7; switch: 17, 7
                             if (isSensorDetection(se, 11)) {
+
+                                int originalSpeed = speed;
+                                tsi.setSpeed(se.getTrainId(), 0);
+                                rightSideControl.acquire();
+                                tsi.setSpeed(se.getTrainId(), originalSpeed);
+                                
                                 tsi.setSwitch(17, 7, TSimInterface.SWITCH_RIGHT);
                             }
-
+                            
+                            // sensor: 15, 8; switch: 17, 7
+                            if (isSensorDetection(se, 14)) { 
+                                
+                                int originalSpeed = speed;
+                                tsi.setSpeed(se.getTrainId(), 0);
+                                rightSideControl.acquire();
+                                tsi.setSpeed(se.getTrainId(), originalSpeed);
+                                    
+                                tsi.setSwitch(17, 7, TSimInterface.SWITCH_LEFT);
+                            }
+                            
                             // sensor: 19, 9; switch: 15, 9
                             if (isSensorDetection(se, 17)) {
-                                tsi.setSwitch(15, 9, TSimInterface.SWITCH_RIGHT);
-                                lowerLoopControlLeft.acquire();
-                                //System.out.println("down:");
-                                //System.out.println(lowerLoopControlLeft.availablePermits());
+                                
+                                if (lowerBranchControl.tryAcquire()) {
+                                    tsi.setSwitch(15, 9, TSimInterface.SWITCH_RIGHT);
+                                } else {
+                                    tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
+                                }
                             }
-
-                            // sensor: 12, 9; switch: 15, 9
-                            if (isSensorDetection(se, 9)) {
-                                tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
-                                lowerLoopControlLeft.release();
-                                //System.out.println("down:");
-                                //System.out.println(lowerLoopControlLeft.availablePermits());
+                            
+                            // release upper rail of the lower branch
+                            if (isSensorDetection(se, 1)) {
+                                lowerBranchControl.release();
                             }
-
-                            // sensor: 6, 9; switch: 4, 9
+                            
                             if (isSensorDetection(se, 5)) {
+                                
+                                int originalSpeed = speed;
+                                tsi.setSpeed(se.getTrainId(), 0);
+                                leftSideControl.acquire();
+                                tsi.setSpeed(se.getTrainId(), originalSpeed);
+                                
                                 tsi.setSwitch(4, 9, TSimInterface.SWITCH_LEFT);
                             }
+                            
+                            // sensor: 6, 9; switch: 4, 9
+                            if (isSensorDetection(se, 6)) {
+                                
+                                int originalSpeed = speed;
+                                tsi.setSpeed(se.getTrainId(), 0);
+                                leftSideControl.acquire();
+                                tsi.setSpeed(se.getTrainId(), originalSpeed);
+                                
+                                tsi.setSwitch(4, 9, TSimInterface.SWITCH_RIGHT);
 
-                            // sensor: 15, 8; switch: 17, 7
-                            if (isSensorDetection(se, 14)) {
-                                tsi.setSwitch(17, 7, TSimInterface.SWITCH_LEFT);
+                            }
+                            
+                            // sensor: 12, 9; switch: 15, 9
+                            if (isSensorDetection(se, 9)) {
+                                rightSideControl.release();
+                                tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
+                            }
+                            
+                            // sensor: 13, 10
+                            if (isSensorDetection(se, 10)) {
+                                rightSideControl.release();
+                            }
+                            
+                            // left side release
+                            if (isSensorDetection(se, 2)) {
+                                leftSideControl.release();
+                                tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
+                            }
+                            
+                            // left side release
+                            if (isSensorDetection(se, 3)) {
+                                leftSideControl.release();
                             }
 
                             // sensor: 1, 10; switch: 3, 11 
                             if (isSensorDetection(se, 0)) {
-                                tsi.setSwitch(3, 11, TSimInterface.SWITCH_RIGHT);
+                                
+                                if (lowerStationControl.tryAcquire()) {
+                                    tsi.setSwitch(3, 11, TSimInterface.SWITCH_RIGHT);
+                                } else {
+                                    tsi.setSwitch(3, 11, TSimInterface.SWITCH_LEFT);
+                                }
                             }
                         } 
                         
@@ -148,16 +204,6 @@ public class Lab1 {
 
                             // sensor: 13, 10; switch: 15, 9
                             if (isSensorDetection(se, 10)) {
-
-                                int originalSpeed = speed;
-                                tsi.setSpeed(se.getTrainId(), 0);
-                                lowerLoopControlLeft.acquire();
-                                tsi.setSpeed(se.getTrainId(), originalSpeed);
-                                lowerLoopControlLeft.release();
-
-                                //System.out.println("up:");
-                                //System.out.println(lowerLoopControlLeft.availablePermits());
-
                                 tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
                             }
 
