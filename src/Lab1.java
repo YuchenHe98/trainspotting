@@ -12,7 +12,7 @@ public class Lab1 {
     private TSimInterface tsi;
 
     //private AddingArrayList<Semaphore> semaphores;
-    Semaphore upperStationControl, rightSideControl, lowerBranchControl, leftSideControl, lowerStationControl;
+    Semaphore rightSideControl, leftSideControl, lowerBranchControl, upperBranchControl, lowerStationControl, crossControl;
     
     int[][] sensors;
     int[][] switches;
@@ -25,6 +25,7 @@ public class Lab1 {
         leftSideControl = new Semaphore(1);
         lowerBranchControl = new Semaphore(1);
         lowerStationControl = new Semaphore(1);
+        upperBranchControl = new Semaphore(1);
         
         initialiseSensors();
 
@@ -38,14 +39,14 @@ public class Lab1 {
     private void initialiseSensors() {
         
         int[][] newSensors = {
-            {1, 11}, //0                  
-            {2, 9}, //1
-            {3, 13}, //2
-            {5, 11}, //3
+            {1, 10}, //0                  
+            {1, 9}, //1
+            {4, 13}, //2
+            {6, 11}, //3
             {6, 7}, //4
-            {6, 9}, //5
+            {7, 9}, //5
             {6, 10}, //6
-            {10, 7}, //7
+            {11, 7}, //7
             {10, 8}, //8
             {12, 9}, //9
             {13, 10}, //10
@@ -56,6 +57,8 @@ public class Lab1 {
             {15, 11}, //15
             {15, 13}, //16
             {19, 9} //17
+            
+            //{5, 10} //18
         };
         
         sensors = newSensors;
@@ -94,6 +97,7 @@ public class Lab1 {
                 while (true) {
                     SensorEvent se = tsi.getSensor(id);
                     
+                    System.out.println(upperBranchControl.availablePermits());
 
                     if ((se.getStatus() == SensorEvent.ACTIVE)) {
                         
@@ -128,15 +132,21 @@ public class Lab1 {
                             if (isSensorDetection(se, 17)) {
                                 
                                 if (lowerBranchControl.tryAcquire()) {
-                                    tsi.setSwitch(15, 9, TSimInterface.SWITCH_RIGHT);
-                                } else {
                                     tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
+                                } else {
+                                    tsi.setSwitch(15, 9, TSimInterface.SWITCH_RIGHT);
+                                }
+                                
+                                if (upperBranchControl.availablePermits() == 0) {
+                                    upperBranchControl.release();
                                 }
                             }
                             
                             // release upper rail of the lower branch
                             if (isSensorDetection(se, 1)) {
-                                lowerBranchControl.release();
+                                if (lowerBranchControl.availablePermits() == 0) {
+                                    lowerBranchControl.release();
+                                }
                             }
                             
                             if (isSensorDetection(se, 5)) {
@@ -163,24 +173,32 @@ public class Lab1 {
                             
                             // sensor: 12, 9; switch: 15, 9
                             if (isSensorDetection(se, 9)) {
-                                rightSideControl.release();
-                                tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
+                                if (rightSideControl.availablePermits() == 0) {
+                                    rightSideControl.release();
+                                }                                
+                                //tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
                             }
                             
                             // sensor: 13, 10
                             if (isSensorDetection(se, 10)) {
-                                rightSideControl.release();
+                                if (rightSideControl.availablePermits() == 0) {
+                                    rightSideControl.release();
+                                }                            
                             }
                             
                             // left side release
                             if (isSensorDetection(se, 2)) {
-                                leftSideControl.release();
-                                tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
+                                if (leftSideControl.availablePermits() == 0) {
+                                    leftSideControl.release();
+                                }                               
+                                //tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
                             }
                             
                             // left side release
                             if (isSensorDetection(se, 3)) {
-                                leftSideControl.release();
+                                if (leftSideControl.availablePermits() == 0) {
+                                    leftSideControl.release();
+                                }                            
                             }
 
                             // sensor: 1, 10; switch: 3, 11 
@@ -197,34 +215,112 @@ public class Lab1 {
                         /* Upwards detections. */
                         else {
                             
-                            // sensor: 1, 10; switch: 4, 9
-                            if (isSensorDetection(se, 0)) {
-                                tsi.setSwitch(4, 9, TSimInterface.SWITCH_RIGHT);
+                            if (isSensorDetection(se, 1)) {
+                                
+                                if (lowerBranchControl.tryAcquire()) {
+                                    tsi.setSwitch(4, 9, TSimInterface.SWITCH_RIGHT);
+                                } else {
+                                    tsi.setSwitch(4, 9, TSimInterface.SWITCH_LEFT);
+                                }
                             }
-
-                            // sensor: 13, 10; switch: 15, 9
-                            if (isSensorDetection(se, 10)) {
-                                tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
-                            }
-
-                            // sensor: 5, 11; switch: 3, 11
-                            if (isSensorDetection(se, 3)) {
-                                tsi.setSwitch(3, 11, TSimInterface.SWITCH_LEFT);
-                            }
-
+                            
                             // sensor: 19, 9; switch: 17, 7
                             if (isSensorDetection(se, 17)) {
-                                tsi.setSwitch(17, 7, TSimInterface.SWITCH_LEFT);
+                                
+                                if (lowerBranchControl.availablePermits() == 0) {
+                                    lowerBranchControl.release();
+                                }
+                                // tsi.setSwitch(17, 7, TSimInterface.SWITCH_LEFT);
+                                
+                                if (upperBranchControl.tryAcquire()) {
+                                    tsi.setSwitch(17, 7, TSimInterface.SWITCH_LEFT);
+                                } else {
+                                    tsi.setSwitch(17, 7, TSimInterface.SWITCH_RIGHT);
+                                }
                             }
+                            
 
-                            // sensor: 3, 13; switch: 3, 11
+                            if (isSensorDetection(se, 3)) {
+                                
+                                int originalSpeed = speed;
+                                tsi.setSpeed(se.getTrainId(), 0);
+                                leftSideControl.acquire();
+                                tsi.setSpeed(se.getTrainId(), originalSpeed);
+                                
+                                tsi.setSwitch(3, 11, TSimInterface.SWITCH_LEFT);
+                            }                    
+                            
+                            
                             if (isSensorDetection(se, 2)) {
+                                
+                                int originalSpeed = speed;
+                                tsi.setSpeed(se.getTrainId(), 0);
+                                leftSideControl.acquire();
+                                tsi.setSpeed(se.getTrainId(), originalSpeed);
+                                
                                 tsi.setSwitch(3, 11, TSimInterface.SWITCH_RIGHT);
                             }
+                            
+                            
+                            // left side release
+                            if (isSensorDetection(se, 5)) {
+                                if (leftSideControl.availablePermits() == 0) {
+                                    leftSideControl.release();
+                                }
+                                
+                                tsi.setSwitch(4, 9, TSimInterface.SWITCH_RIGHT);
 
+                            }
+                            
+                            // left side release
+                            if (isSensorDetection(se, 6)) {
+                                if (leftSideControl.availablePermits() == 0) {
+                                    leftSideControl.release();
+                                }
+                                
+                                tsi.setSwitch(4, 9, TSimInterface.SWITCH_LEFT);
+
+                            }    
+                            
                             // sensor: 12, 9; switch: 15, 9
                             if (isSensorDetection(se, 9)) {
+                                
+                                int originalSpeed = speed;
+                                tsi.setSpeed(se.getTrainId(), 0);
+                                rightSideControl.acquire();
+                                tsi.setSpeed(se.getTrainId(), originalSpeed);
+                                
                                 tsi.setSwitch(15, 9, TSimInterface.SWITCH_RIGHT);
+                            }
+                            
+                            // sensor: 13, 10; switch: 15, 9
+                            if (isSensorDetection(se, 10)) {
+                                
+                                int originalSpeed = speed;
+                                tsi.setSpeed(se.getTrainId(), 0);
+                                rightSideControl.acquire();
+                                tsi.setSpeed(se.getTrainId(), originalSpeed);
+                                
+                                tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
+                            }     
+                            
+                            if (isSensorDetection(se, 11)) {
+                                if (rightSideControl.availablePermits() == 0) {
+                                    rightSideControl.release();
+                                }                                
+                            }
+                            
+                            if (isSensorDetection(se, 14)) {
+                                if (rightSideControl.availablePermits() == 0) {
+                                    rightSideControl.release();
+                                }                            
+                            }
+                            
+                            if (isSensorDetection(se, 0)) {
+                                
+                                if (lowerStationControl.availablePermits() == 0) {
+                                    lowerStationControl.release();
+                                }
                             }
                         }
 
