@@ -11,7 +11,7 @@ public class Lab1 {
 
     private TSimInterface tsi;
 
-    Semaphore rightSideControl, leftSideControl, lowerBranchControl, upperBranchControl, lowerStationControl, crossControl, lowerBarControl;
+    Semaphore rightSideControl, leftSideControl, lowerBranchControl, upperBranchControl, lowerStationControl, crossControl; 
     
     int[][] sensors;
 
@@ -25,7 +25,6 @@ public class Lab1 {
         lowerStationControl = new Semaphore(1);
         upperBranchControl = new Semaphore(1);
         crossControl = new Semaphore(1);
-        lowerBarControl = new Semaphore(1);
         
         initialiseSensors();
 
@@ -68,11 +67,19 @@ public class Lab1 {
         int id;
         int speed;
         int direction;
+        boolean releaseUpperBranchPermit;
+        boolean releaseLowerStationPermit;
+        boolean releaseLowerBranchLeftPermit;
+        boolean releaseLowerBranchRightPermit;
 
         public Train(int id, int speed, int direction) {
             this.id = id;
             this.speed = speed;
             this.direction = direction;
+            this.releaseUpperBranchPermit = false;
+            this.releaseLowerStationPermit = false;
+            this.releaseLowerBranchRightPermit = false;
+            this.releaseLowerBranchLeftPermit = false;
         }
         
         private boolean isSensorDetection(SensorEvent se, int index) {
@@ -90,17 +97,9 @@ public class Lab1 {
                 tsi.setSpeed(id, speed);///Speed args are 15 and 15.
                 
                 while (true) {
-                    
-                    /*
-                    System.out.println(rightSideControl.availablePermits());
-                    System.out.println(leftSideControl.availablePermits());
-                    System.out.println(lowerBranchControl.availablePermits());
-                    System.out.println(lowerStationControl.availablePermits());
-                    System.out.println(upperBranchControl.availablePermits());
-                    System.out.println(crossControl.availablePermits());
-                    System.out.println(lowerBarControl.availablePermits());                   
-                    */
-                    
+                        
+                    //System.out.println(lowerBranchControl.availablePermits());
+
                     SensorEvent se = tsi.getSensor(id);
                     
                     if ((se.getStatus() == SensorEvent.ACTIVE)) {
@@ -127,7 +126,9 @@ public class Lab1 {
                                 tsi.setSpeed(se.getTrainId(), 0);
                                 rightSideControl.acquire();
                                 tsi.setSpeed(se.getTrainId(), originalSpeed);
-                                    
+                                 
+                                releaseUpperBranchPermit = true;
+                                
                                 tsi.setSwitch(17, 7, TSimInterface.SWITCH_LEFT);
                             }
                             
@@ -136,27 +137,28 @@ public class Lab1 {
                             */
                             if (isSensorDetection(se, 17)) {
                                 
+                                if (releaseUpperBranchPermit) {
+                                    upperBranchControl.release();
+                                    releaseUpperBranchPermit = false;
+                                }
+                                
                                 if (lowerBranchControl.tryAcquire()) {
                                     tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
                                 } else {
                                     tsi.setSwitch(15, 9, TSimInterface.SWITCH_RIGHT);
                                 }
                                 
-                                if (upperBranchControl.availablePermits() == 0) {
-                                    upperBranchControl.release();
-                                }
-                                
                                 // start only if the opposite train enters the branch
                                 int originalSpeed = speed;
                                 tsi.setSpeed(se.getTrainId(), 0);
-                                lowerBarControl.acquire();
                                 tsi.setSpeed(se.getTrainId(), originalSpeed);
                             }
                             
                             /* Release upper rail of the lower branch */
                             if (isSensorDetection(se, 1)) {
-                                if (lowerBranchControl.availablePermits() == 0) {
+                                if (releaseLowerBranchLeftPermit) {
                                     lowerBranchControl.release();
+                                    releaseLowerBranchLeftPermit = false;
                                 }
                             }
                             
@@ -178,31 +180,25 @@ public class Lab1 {
                                 leftSideControl.acquire();
                                 tsi.setSpeed(se.getTrainId(), originalSpeed);
                                 
+                                releaseLowerBranchLeftPermit = true;
+                                    
                                 tsi.setSwitch(4, 9, TSimInterface.SWITCH_RIGHT);
 
                             }
                             
                             /* Release the right side rail */
                             if (isSensorDetection(se, 9) || isSensorDetection(se, 10)) {
-                                if (rightSideControl.availablePermits() == 0) {
-                                    rightSideControl.release();
-                                }  
-                                
-                                if (lowerBarControl.availablePermits() == 0) {
-                                    lowerBarControl.release();
-                                }
+                                rightSideControl.release();
                             }
                             
                             /* left side release */
                             if (isSensorDetection(se, 2) || isSensorDetection(se, 3)) {
-                                if (leftSideControl.availablePermits() == 0) {
-                                    leftSideControl.release();
-                                }                               
+                                leftSideControl.release();
                             }
                             
                             /* block the lower branch of lower station */ 
                             if (isSensorDetection(se, 0)) {
-                                
+                                //isOnDefaultPath = lowerStationControl.tryAcquire();
                                 if (lowerStationControl.tryAcquire()) {
                                     tsi.setSwitch(3, 11, TSimInterface.SWITCH_RIGHT);
                                 } else {
@@ -221,10 +217,7 @@ public class Lab1 {
                             
                             /* release the crossing */ 
                             if (isSensorDetection(se, 7) || isSensorDetection(se, 8)) {
-                    
-                                if (crossControl.availablePermits() == 0) {
-                                    crossControl.release();
-                                }
+                                crossControl.release();
                             }
                         } 
                         
@@ -246,17 +239,18 @@ public class Lab1 {
                                 // start only if the opposite train enters the branch
                                 int originalSpeed = speed;
                                 tsi.setSpeed(se.getTrainId(), 0);
-                                lowerBarControl.acquire();
                                 tsi.setSpeed(se.getTrainId(), originalSpeed);
                             }
                             
                             /* Release lower branch and block upper branch */
                             if (isSensorDetection(se, 17)) {
                                 
-                                if (lowerBranchControl.availablePermits() == 0) {
+                                if (releaseLowerBranchRightPermit) {
                                     lowerBranchControl.release();
+                                    releaseLowerBranchRightPermit = false;
                                 }
                                 
+                                //System.out.println("permits: " + upperBranchControl.availablePermits());
                                 if (upperBranchControl.tryAcquire()) {
                                     tsi.setSwitch(17, 7, TSimInterface.SWITCH_LEFT);
                                 } else {
@@ -283,6 +277,7 @@ public class Lab1 {
                                 leftSideControl.acquire();
                                 tsi.setSpeed(se.getTrainId(), originalSpeed);
                                 
+                                releaseLowerStationPermit = true;
                                 tsi.setSwitch(3, 11, TSimInterface.SWITCH_RIGHT);
                             }
                             
@@ -290,13 +285,7 @@ public class Lab1 {
                             /* Release the left side rail and opposite coming train */
                             // 5 set to right
                             if (isSensorDetection(se, 5) || isSensorDetection(se, 6)) {
-                                if (leftSideControl.availablePermits() == 0) {
-                                    leftSideControl.release();
-                                }
-                                
-                                if (lowerBarControl.availablePermits() == 0) {
-                                    lowerBarControl.release();
-                                }
+                                leftSideControl.release();
                             }
                             
                             /* Block the right side rail. */
@@ -317,21 +306,22 @@ public class Lab1 {
                                 rightSideControl.acquire();
                                 tsi.setSpeed(se.getTrainId(), originalSpeed);
                                 
+                                releaseLowerBranchRightPermit = true;
+
                                 tsi.setSwitch(15, 9, TSimInterface.SWITCH_LEFT);
                             }     
                             
                             /* Release right side control */
                             if (isSensorDetection(se, 11) || isSensorDetection(se, 14)) {
-                                if (rightSideControl.availablePermits() == 0) {
-                                    rightSideControl.release();
-                                }                                
+                                rightSideControl.release();
                             }
                             
                             /* Release lower station control */
                             if (isSensorDetection(se, 0)) {
                                 
-                                if (lowerStationControl.availablePermits() == 0) {
+                                if (releaseLowerStationPermit) {
                                     lowerStationControl.release();
+                                    releaseLowerStationPermit = false;
                                 }
                             }
                             
@@ -347,9 +337,7 @@ public class Lab1 {
                             /* Release crossing */
                             if (isSensorDetection(se, 4) || isSensorDetection(se, 18)) {
                     
-                                if (crossControl.availablePermits() == 0) {
-                                    crossControl.release();
-                                }
+                                crossControl.release();
                             }
                         }
                         
